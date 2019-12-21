@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Chat</title>
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous" />
+</head>
+
+<body>
+  <div id="app">
+    <div class="container">
+      <div class="col-lg-6 offset-lg-3">
+
+        <div v-if="isReady">
+          <p v-for="user in info">
+            {{user.username}} {{user.type}}
+          </p>
+        </div>
+
+        <div v-if="!isReady">
+          <h4>Please enter your name</h4>
+          <form @submit.prevent="addUser">
+            <div class="form-group row">
+              <input type="text" class="form-control" v-model="username" placeholder="your name">
+              <input type="submit" value="Join chat" class="btn btn-sm btn-success ml-2">
+            </div>
+          </form>
+        </div>
+
+        <h2 v-else>You: {{username}}</h2>
+        <div class="card bg-success mb-3" v-if="isReady">
+          <div class="card-header">
+            <h4>Chat with socket.io<span class="float-right">{{connections}} connections</span></h4>
+          </div>
+          <ul class="list-group list-group-flush text-right">
+            <li class="list-group-item" v-for="message in messages">
+              <span :class="{'float-left':message.type === 1}">
+                {{message.message}}
+                <small>:{{message.user}}</small>
+              </span>
+            </li>
+          </ul>
+
+          <div class="card-body">
+            <form @submit.prevent="send">
+              <div class="form-group">
+                <input type="text" class="form-control" v-model="newMessage" placeholder="Enter message here">
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.10/vue.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</body>
+
+<script>
+  const socket = io();
+
+  const vue = new Vue({
+    el: '#app',
+    data: {
+      username: null,
+      newMessage: null,
+      messages: [],
+      isReady: false,
+      connections: 0,
+      info: [],
+      timeMessage: null
+    },
+
+    created() {
+      window.onbeforeunload = () => {
+        socket.emit('leave', this.username);
+      }
+      socket.on('chat-message', (data) => {
+        this.messages.push({
+          message: data.message,
+          type: 1,
+          user: data.user,
+        });
+      });
+      socket.on('joined', (data) => {
+        this.info.push({
+          username: data,
+          type: 'joined'
+        });
+        setTimeout(() => {
+          this.info = [];
+        }, 5000);
+      });
+      socket.on('leave', (data) => {
+        this.info.push({
+          username: data,
+          type: 'left'
+        });
+
+        setTimeout(() => {
+          this.info = [];
+        }, 5000);
+      });
+      socket.on('connections', (data) => {
+        this.connections = data;
+      });
+    },
+    methods: {
+      send() {
+        let enterTime = new Date()
+        this.timeMessage = `${enterTime.getHours()}:${enterTime.getMinutes()}:${enterTime.getSeconds()}`
+        this.messages.push({
+          message: this.newMessage,
+          type: 0,
+          user:`${this.username} at ${this.timeMessage}`
+        });
+        socket.emit('chat-message', {
+          message: this.newMessage,
+          user:`${this.username} at ${this.timeMessage}`
+        });
+        this.newMessage = null;
+        this.timeMessage = null;
+      },
+      addUser() {
+        this.isReady = true;
+        socket.emit('joined', this.username)
+      }
+    },
+  });
+</script>
+
+</html>
